@@ -54,4 +54,5 @@ This project uses a **Stacking Regressor ensemble** (Ridge + Random Forest + XGB
 
 ## 📂 Project Structure
 
-<img width="687" height="422" alt="image" src="https://github.com/user-attachments/assets/9312715b-c67d-45e4-bdf0-c880a1ed90fc" />
+<img width="687" height="422" alt="image" src="https://github.com/user-attachments/assets/37a32a0e-734e-4ee6-a756-7a0a4b417a78" />
+
