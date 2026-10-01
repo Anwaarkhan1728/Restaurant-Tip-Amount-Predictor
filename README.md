@@ -54,19 +54,4 @@ This project uses a **Stacking Regressor ensemble** (Ridge + Random Forest + XGB
 
 ## 📂 Project Structure
 
-tip-amount-predictor/
-│
-├── app.py                          ← Main Streamlit app
-├── requirements.txt                ← Python dependencies
-├── README.md                       ← Attractive documentation
-├── .gitignore                      ← Git ignore rules
-│
-├── saved_model/                    ← Model files (aap Kaggle se upload karein)
-│   ├── best_tip_regressor.pkl
-│   ├── scaler.pkl
-│   ├── feature_names.pkl
-│   ├── te_means.pkl
-│   └── final_results.csv           (optional)
-│
-└── .streamlit/
-    └── config.toml                 ← Theme settings
+<img width="687" height="422" alt="image" src="https://github.com/user-attachments/assets/9312715b-c67d-45e4-bdf0-c880a1ed90fc" />
