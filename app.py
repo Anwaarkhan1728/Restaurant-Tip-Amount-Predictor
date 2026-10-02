@@ -1,286 +1,136 @@
-"""
-🍽️ Restaurant Tip Amount Predictor
-====================================
-A Machine Learning web app that predicts the tip amount based on
-restaurant bill, party size, and customer details.
-
-Model: Stacking Regressor (CV R² ≈ 0.47)
-Author: Khanniazi
-"""
-
-import streamlit as st
-import pandas as pd
-import numpy as np
+from pathlib import Path
 import joblib
-import os
+import numpy as np
+import pandas as pd
+import streamlit as st
 
-# ---------- Page Configuration ----------
 st.set_page_config(
-    page_title="🍽️ Tip Amount Predictor",
+    page_title="Restaurant Tip Predictor",
     page_icon="🍽️",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="centered",
 )
 
-# ---------- Custom CSS for Attractive UI ----------
-st.markdown("""
-<style>
-    /* Main header styling */
-    .main-header {
-        font-size: 3rem;
-        font-weight: 800;
-        background: linear-gradient(90deg, #FF6B6B, #FFA500, #4ECDC4);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        text-align: center;
-        margin-bottom: 0;
-    }
-    .sub-header {
-        text-align: center;
-        color: #666;
-        font-size: 1.1rem;
-        margin-top: -10px;
-        margin-bottom: 30px;
-    }
-    /* Prediction card */
-    .prediction-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 40px;
-        border-radius: 20px;
-        text-align: center;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        margin: 20px 0;
-    }
-    .prediction-label {
-        color: #ffffff;
-        font-size: 1.3rem;
-        font-weight: 500;
-        margin-bottom: 10px;
-        opacity: 0.9;
-    }
-    .prediction-value {
-        color: #ffffff;
-        font-size: 4rem;
-        font-weight: 900;
-        margin: 0;
-        text-shadow: 2px 2px 8px rgba(0,0,0,0.3);
-    }
-    /* Info box */
-    .info-box {
-        background: #f0f2f6;
-        padding: 20px;
-        border-radius: 12px;
-        border-left: 5px solid #667eea;
-        margin: 15px 0;
-    }
-    /* Metric styling */
-    .metric-box {
-        background: white;
-        padding: 15px;
-        border-radius: 10px;
-        text-align: center;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    }
-    /* Footer */
-    .footer {
-        text-align: center;
-        color: #999;
-        padding: 20px 0;
-        font-size: 0.9rem;
-        border-top: 1px solid #eee;
-        margin-top: 40px;
-    }
-</style>
-""", unsafe_allow_html=True)
+BUNDLE_PATH = Path("tip_model_bundle.pkl")
 
 
-# ---------- Load Model Artifacts ----------
-@st.cache_resource(show_spinner=False)
-def load_artifacts():
-    """Load all saved model artifacts."""
-    base = "saved_model"
-    model = joblib.load(os.path.join(base, "best_tip_regressor.pkl"))
-    scaler = joblib.load(os.path.join(base, "scaler.pkl"))
-    feature_names = joblib.load(os.path.join(base, "feature_names.pkl"))
-    te_means = joblib.load(os.path.join(base, "te_means.pkl"))
-    return model, scaler, feature_names, te_means
+@st.cache_resource
+def load_bundle(uploaded_file=None):
+    if uploaded_file is not None:
+        return joblib.load(uploaded_file)
 
+    if BUNDLE_PATH.exists():
+        return joblib.load(BUNDLE_PATH)
 
-try:
-    model, scaler, feature_names, te_means = load_artifacts()
-    MODEL_LOADED = True
-except Exception as e:
-    MODEL_LOADED = False
-    st.error(f"⚠️ Model load error: {e}")
-    st.stop()
-
-
-# ---------- Prediction Function ----------
-def predict_tip(total_bill, size, sex, smoker, day, time):
-    """Build feature row, scale it, and predict tip."""
-    row = {
-        'total_bill':     total_bill,
-        'size':           size,
-        'is_weekend':     1 if day in ['Sat', 'Sun'] else 0,
-        'is_dinner':      1 if time == 'Dinner' else 0,
-        'is_male':        1 if sex == 'Male' else 0,
-        'is_smoker':      1 if smoker == 'Yes' else 0,
-        'is_large_party': 1 if size >= 4 else 0,
-        'bill_per_head':  total_bill / size,
-        'bill_squared':   total_bill ** 2,
-        'log_bill':       np.log1p(total_bill),
-        'day_Sat':        1 if day == 'Sat' else 0,
-        'day_Sun':        1 if day == 'Sun' else 0,
-        'day_Thur':       1 if day == 'Thur' else 0,
-        'time_Lunch':     1 if time == 'Lunch' else 0,
+    # Fallback: separate files
+    return {
+        "model": joblib.load("best_tip_regressor.pkl"),
+        "scaler": joblib.load("scaler.pkl"),
+        "feature_names": joblib.load("feature_names.pkl"),
+        "te_means": joblib.load("te_means.pkl"),
     }
 
-    # Fill target-encoded features with stored means
-    for c in feature_names:
-        if c not in row:
-            row[c] = te_means.get(c, 2.99)
 
-    X_new = pd.DataFrame([row]).astype(float)
-    X_new = X_new[feature_names]
-
-    X_sc = scaler.transform(X_new)
-    pred = model.predict(X_sc)[0]
-    return round(float(pred), 2)
+def map_te(te_means, key, lookup, default=0.0):
+    val = te_means.get(key, default)
+    if isinstance(val, dict):
+        return float(val.get(lookup, default))
+    return float(val)
 
 
-# ================================================================
-# HEADER
-# ================================================================
-st.markdown('<h1 class="main-header">🍽️ Restaurant Tip Predictor</h1>',
-            unsafe_allow_html=True)
-st.markdown('<p class="sub-header">Predict the tip amount using Machine Learning '
-            '— Stacking Regressor (CV R² ≈ 0.47)</p>',
-            unsafe_allow_html=True)
+def build_features(total_bill, size, sex, smoker, day, time, te_means):
+    is_weekend = 1 if day in ("Sat", "Sun") else 0
+    is_dinner = 1 if time == "Dinner" else 0
+    is_male = 1 if sex == "Male" else 0
+    is_smoker = 1 if smoker == "Yes" else 0
+    is_large_party = 1 if size >= 5 else 0
+
+    bill_per_head = total_bill / size if size > 0 else 0.0
+    bill_squared = total_bill ** 2
+    log_bill = np.log1p(total_bill) if total_bill >= 0 else 0.0
+
+    day_Sat = 1 if day == "Sat" else 0
+    day_Sun = 1 if day == "Sun" else 0
+    day_Thur = 1 if day == "Thur" else 0
+    time_Lunch = 1 if time == "Lunch" else 0
+
+    size_te = map_te(te_means, "size_te", size)
+    weekend_te = map_te(te_means, "weekend_te", is_weekend)
+    dinner_te = map_te(te_means, "dinner_te", is_dinner)
+    sat_te = map_te(te_means, "sat_te", day_Sat)
+    sun_te = map_te(te_means, "sun_te", day_Sun)
+    thur_te = map_te(te_means, "thur_te", day_Thur)
+    lunch_te = map_te(te_means, "lunch_te", time_Lunch)
+    size_dinner_te = map_te(te_means, "size_dinner_te", (size, is_dinner))
+    size_weekend_te = map_te(te_means, "size_weekend_te", (size, is_weekend))
+
+    return {
+        "total_bill": total_bill,
+        "size": size,
+        "is_weekend": is_weekend,
+        "is_dinner": is_dinner,
+        "is_male": is_male,
+        "is_smoker": is_smoker,
+        "is_large_party": is_large_party,
+        "bill_per_head": bill_per_head,
+        "bill_squared": bill_squared,
+        "log_bill": log_bill,
+        "day_Sat": day_Sat,
+        "day_Sun": day_Sun,
+        "day_Thur": day_Thur,
+        "time_Lunch": time_Lunch,
+        "size_te": size_te,
+        "weekend_te": weekend_te,
+        "dinner_te": dinner_te,
+        "sat_te": sat_te,
+        "sun_te": sun_te,
+        "thur_te": thur_te,
+        "lunch_te": lunch_te,
+        "size_dinner_te": size_dinner_te,
+        "size_weekend_te": size_weekend_te,
+    }
 
 
-# ================================================================
-# SIDEBAR — Input Controls
-# ================================================================
-with st.sidebar:
-    st.markdown("## 🎛️ Enter Bill Details")
-    st.markdown("---")
+st.title("🍽️ Restaurant Tip Amount Predictor")
+st.write("Enter bill and party details to predict the tip amount.")
 
-    total_bill = st.number_input(
-        "💵 Total Bill ($)",
-        min_value=1.0, max_value=200.0, value=20.0, step=0.5,
-        help="Enter the total bill amount in dollars"
-    )
+uploaded = st.sidebar.file_uploader(
+    "Upload tip_model_bundle.pkl (optional)",
+    type=["pkl"],
+)
 
-    size = st.slider(
-        "👥 Party Size",
-        min_value=1, max_value=10, value=2,
-        help="Number of people in the party"
-    )
+bundle = load_bundle(uploaded)
 
-    col_a, col_b = st.columns(2)
-    with col_a:
-        sex = st.radio("👤 Sex", ["Male", "Female"], index=0)
-    with col_b:
-        smoker = st.radio("🚬 Smoker", ["No", "Yes"], index=0)
+model = bundle["model"]
+scaler = bundle["scaler"]
+feature_names = list(bundle["feature_names"])
+te_means = bundle["te_means"]
 
-    day = st.selectbox(
-        "📅 Day of Week",
-        ["Sun", "Sat", "Thur", "Fri"], index=0
-    )
+with st.form("input_form"):
+    col1, col2 = st.columns(2)
 
-    time = st.radio(
-        "🕐 Time",
-        ["Dinner", "Lunch"], index=0, horizontal=True
-    )
+    with col1:
+        total_bill = st.number_input(
+            "Total bill",
+            min_value=0.0,
+            max_value=1000.0,
+            value=50.0,
+            step=1.0,
+        )
+        size = st.slider("Party size", min_value=1, max_value=10, value=2)
+        sex = st.selectbox("Sex", ["Male", "Female"])
 
-    st.markdown("---")
-    predict_btn = st.button("🔮 Predict Tip", use_container_width=True, type="primary")
+    with col2:
+        smoker = st.selectbox("Smoker", ["No", "Yes"])
+        day = st.selectbox("Day", ["Thur", "Fri", "Sat", "Sun"])
+        time = st.selectbox("Time", ["Lunch", "Dinner"])
 
-    st.markdown("---")
-    st.markdown("### 📊 Model Info")
-    st.markdown("""
-    - **Algorithm:** Stacking Regressor
-    - **Base Models:** Ridge, RF, XGBoost, GB
-    - **Test R²:** 0.33
-    - **CV R²:** 0.47
-    - **Dataset:** 233 restaurant bills
-    """)
+    submitted = st.form_submit_button("Predict tip")
 
+if submitted:
+    features = build_features(total_bill, size, sex, smoker, day, time, te_means)
+    X = pd.DataFrame([features], columns=feature_names)
+    X_scaled = scaler.transform(X)
+    pred = model.predict(X_scaled)[0]
 
-# ================================================================
-# MAIN AREA
-# ================================================================
-col1, col2 = st.columns([1, 1])
-
-with col1:
-    st.markdown("### 📋 Your Input Summary")
-
-    summary_df = pd.DataFrame({
-        "Feature": ["💵 Total Bill", "👥 Party Size", "👤 Sex",
-                    "🚬 Smoker", "📅 Day", "🕐 Time"],
-        "Value": [f"${total_bill:.2f}", size, sex, smoker, day, time]
-    })
-    st.dataframe(summary_df, hide_index=True, use_container_width=True)
-
-    # Extra insights
-    bill_per_head = total_bill / size
-    st.markdown(f"""
-    <div class="info-box">
-        <b>💡 Insights:</b><br>
-        • Bill per head: <b>${bill_per_head:.2f}</b><br>
-        • Weekend: <b>{"Yes" if day in ["Sat","Sun"] else "No"}</b><br>
-        • Large party (≥4): <b>{"Yes" if size >= 4 else "No"}</b>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col2:
-    st.markdown("### 🎯 Prediction Result")
-
-    if predict_btn:
-        with st.spinner("Calculating..."):
-            tip = predict_tip(total_bill, size, sex, smoker, day, time)
-            tip_pct = (tip / total_bill) * 100
-            total_with_tip = total_bill + tip
-
-        st.markdown(f"""
-        <div class="prediction-card">
-            <div class="prediction-label">Predicted Tip Amount</div>
-            <div class="prediction-value">${tip}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Tip %", f"{tip_pct:.1f}%")
-        m2.metric("Total + Tip", f"${total_with_tip:.2f}")
-        m3.metric("Per Person", f"${total_with_tip/size:.2f}")
-
-    else:
-        st.info("👈 Enter your details and click **🔮 Predict Tip** to get the prediction.")
-
-
-# ================================================================
-# EXAMPLES SECTION
-# ================================================================
-st.markdown("---")
-st.markdown("### 🧪 Try These Examples")
-
-example_df = pd.DataFrame({
-    "Scenario": ["☕ Casual Lunch", "🍷 Weekend Dinner", "🎉 Big Group",
-                 "🍔 Quick Bite", "💰 Splurge Night"],
-    "Bill": ["$15", "$35", "$50", "$10", "$70"],
-    "Size": [2, 4, 6, 1, 5],
-    "Day": ["Thur", "Sat", "Sat", "Fri", "Sun"],
-    "Time": ["Lunch", "Dinner", "Dinner", "Lunch", "Dinner"],
-})
-st.dataframe(example_df, hide_index=True, use_container_width=True)
-
-
-# ================================================================
-# FOOTER
-# ================================================================
-st.markdown("""
-<div class="footer">
-    Built with ❤️ using Streamlit & Scikit-learn<br>
-    © 2026 — Restaurant Tip Predictor
-</div>
-""", unsafe_allow_html=True)
+    st.success(f"Predicted tip: **${pred:.2f}**")
+    st.caption("Model: best_tip_regressor.pkl (StackingRegressor)")
