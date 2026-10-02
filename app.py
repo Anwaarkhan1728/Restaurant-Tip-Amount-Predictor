@@ -7,16 +7,6 @@ restaurant bill, party size, and customer details.
 Model: Stacking Regressor (CV R² ≈ 0.47)
 Author: Khanniazi
 """
-import os
-
-print("Current folder:", os.getcwd())
-print("Files:", os.listdir())
-
-if os.path.exists("saved_model"):
-    print("saved_model files:", os.listdir("saved_model"))
-else:
-    print("saved_model folder NOT FOUND")
-
 
 import streamlit as st
 import pandas as pd
